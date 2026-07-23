@@ -50,6 +50,10 @@ linters:
       confidence: medium
       excludes:
         - G204 # Subprocess with variable
+        # G304: nexus3-go's whole purpose is uploading operator-specified
+        # files (--file flag / library filePath argument); the path is a
+        # deliberate CLI input, not attacker-controlled request data.
+        - G304
 
     revive:
       rules:

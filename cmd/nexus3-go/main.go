@@ -13,6 +13,22 @@
 //	nexus3-go nexus --help
 //	nexus3-go nexus list-repositories
 //
+// One operation falls outside that coverage: uploading a component (POST
+// /v1/components) needs multipart fields (apt.asset, yum.asset, raw.asset1,
+// maven2.asset1, ...) that Nexus's own OpenAPI document does not declare, so
+// Restish can never generate flags for them. "upload <kind>" is a small
+// hand-written command for exactly that case — kinds: deb, rpm, raw,
+// maven2, go, helm, npm, nuget, pypi, rubygems (every hosted format Nexus
+// exposes through this endpoint except docker, which uses the separate
+// Docker Registry HTTP API v2 instead). See cmd/nexus3-go/upload.go and
+// pkg/nexus3.UploadDeb/UploadRpm/UploadRaw/UploadMaven2/UploadSimple.
+//
+//	NEXUS_USERNAME=admin NEXUS_PASSWORD=*** nexus3-go upload deb \
+//	    --base-url http://localhost:8081 --repository apt-hosted --file pkg.deb
+//	NEXUS_USERNAME=admin NEXUS_PASSWORD=*** nexus3-go upload maven2 \
+//	    --base-url http://localhost:8081 --repository maven-hosted --file lib.jar \
+//	    --group-id com.example --artifact-id lib --version 1.0
+//
 // For programmatic access from Go code, see the pkg/nexus3 library instead.
 package main
 
@@ -24,6 +40,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "upload" {
+		if err := runUpload(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	cli := restish.New()
 	cli.SetCommandName("nexus3-go")
 

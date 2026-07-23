@@ -108,6 +108,33 @@ See the [Restish docs](https://rest.sh/docs/) for output formatting
 all of it applies unchanged since `nexus3-go` is a thin, Nexus-named build of
 the stock Restish CLI.
 
+## Uploading components
+
+Nexus's own OpenAPI/swagger.json declares no request body for the component
+upload endpoint (`POST /v1/components`), so Restish can never generate flags
+for it — the CLI's generic `nexus3-go nexus ...` command tree cannot reach
+it. A small hand-written `upload` command covers it instead, for every
+hosted format Nexus exposes through that endpoint except docker (which uses
+the separate Docker Registry HTTP API v2 — plain `docker push`):
+
+```sh
+export NEXUS_USERNAME=admin NEXUS_PASSWORD=admin123
+
+nexus3-go upload deb --base-url http://localhost:8081 \
+    --repository apt-hosted --file mypkg_1.0_amd64.deb
+nexus3-go upload rpm --base-url http://localhost:8081 \
+    --repository yum-hosted --file mypkg-1.0.el9.x86_64.rpm
+nexus3-go upload raw --base-url http://localhost:8081 \
+    --repository raw-hosted --directory docs --file notes.txt
+nexus3-go upload maven2 --base-url http://localhost:8081 \
+    --repository maven-hosted --file lib.jar \
+    --group-id com.example --artifact-id lib --version 1.0
+nexus3-go upload npm --base-url http://localhost:8081 \
+    --repository npm-hosted --file mypkg-1.0.0.tgz   # also: go, helm, nuget, pypi, rubygems
+```
+
+`--base-url` also reads from `NEXUS_BASE_URL` if unset.
+
 ## Docker
 
 Multi-arch (`linux/amd64`, `linux/arm64`) images are published to GHCR on
