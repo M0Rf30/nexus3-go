@@ -74,3 +74,19 @@ func (c *Client) authCtx(ctx context.Context) context.Context {
 		Password: c.password,
 	})
 }
+
+// API returns the underlying generated *v3.APIClient, giving access to every
+// Nexus REST endpoint (blob stores, security, tasks, staging, etc.) beyond
+// the convenience methods on Client. Pass ctx through AuthContext first so
+// calls carry the configured credentials.
+func (c *Client) API() *v3.APIClient {
+	return c.api
+}
+
+// AuthContext returns ctx carrying the Client's configured basic-auth
+// credentials, as required by every generated API call. Use it when calling
+// API() directly. It is a no-op passthrough when no credentials were
+// configured.
+func (c *Client) AuthContext(ctx context.Context) context.Context {
+	return c.authCtx(ctx)
+}

@@ -15,9 +15,6 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -s -w
-      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Version=v{{.Version}}
-      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Commit={{.ShortCommit}}
-      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.BuildTime={{.Date}}
     goos:
       - linux
       - darwin

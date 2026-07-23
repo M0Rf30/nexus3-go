@@ -8,18 +8,23 @@ UNOFFICIAL Go client and CLI for Sonatype Nexus Repository Manager 3, built on t
 
 ## Overview
 
-`nexus3-go` is a thin wrapper around
-[`github.com/sonatype-nexus-community/nexus-repo-api-client-go`](https://github.com/sonatype-nexus-community/nexus-repo-api-client-go),
-a community-generated OpenAPI client that already covers the full Nexus
-Repository Manager 3 REST surface (repositories, components, assets, search,
-blobstores, security, tasks, and more). This project does not regenerate or
-reimplement that client — it wraps it with:
+`nexus3-go` has two independent parts:
 
-- a small `pkg/nexus3` library that configures the generated client, injects
-  basic auth per request, and exposes a handful of convenience methods
-  (`ListRepositories`, `SearchComponents`, `Status`, ...), and
-- a `nexus3-go` CLI built on [Cobra](https://github.com/spf13/cobra) for
-  common day-to-day operations against a Nexus instance.
+- **`pkg/nexus3`** — a small library wrapping the community-generated OpenAPI
+  client [`github.com/sonatype-nexus-community/nexus-repo-api-client-go`](https://github.com/sonatype-nexus-community/nexus-repo-api-client-go)
+  for use from Go programs. It configures the client, injects basic auth per
+  request, and exposes a handful of convenience methods (`ListRepositories`,
+  `SearchComponents`, `Status`, ...) plus an escape hatch to the full
+  generated client for anything else.
+
+- **`cmd/nexus3-go`** — a CLI with *total* command coverage of a Nexus
+  instance's REST API, built by embedding [Restish](https://rest.sh)
+  (`github.com/rest-sh/restish`). Restish discovers the live OpenAPI document
+  a Nexus server publishes at `/service/rest/swagger.json` and generates one
+  CLI command per operation — the full ~950-endpoint surface (repositories,
+  components, assets, search, blobstores, security, tasks, staging, cleanup
+  policies, and more), always in sync with whatever version that specific
+  server actually runs, with no code generation or vendoring on our side.
 
 ## Installation
 
@@ -63,30 +68,45 @@ func main() {
 }
 ```
 
+Only a handful of convenience methods are wrapped (`ListRepositories`,
+`SearchComponents`/`ListComponents`, `Status`). For anything else — blob
+stores, security, tasks, staging, cleanup policies, and the rest of Nexus's
+~950-endpoint REST surface — drop down to the generated client directly via
+`Client.API()`, authenticating each call with `Client.AuthContext(ctx)`:
+
+```go
+api := client.API()
+ctx := client.AuthContext(context.Background())
+
+task, _, err := api.TasksAPI.GetTaskById(ctx, taskID).Execute()
+```
+
 ## CLI usage
 
-`--url`, `--username`, and `--password` flags fall back to the
-`NEXUS3_URL`, `NEXUS3_USERNAME`, and `NEXUS3_PASSWORD` environment variables
-respectively, so credentials don't need to be passed on every invocation:
+Connect once per Nexus instance (credentials and the discovered command set
+are persisted under Restish's config directory):
 
 ```sh
-export NEXUS3_URL=http://localhost:8081
-export NEXUS3_USERNAME=admin
-export NEXUS3_PASSWORD=admin123
-
-nexus3-go status
-
-nexus3-go repositories list
-
-nexus3-go components search --repository maven-releases --query foo
+nexus3-go api connect nexus http://localhost:8081 \
+    --spec http://localhost:8081/service/rest/swagger.json
 ```
 
-Equivalently, flags can be passed explicitly instead of using environment
-variables:
+You'll be prompted for the Basic Auth username/password Nexus requires (or
+pass them inline, e.g. `prompt.credentials.BasicAuth.username:admin`). Then
+every discovered operation is available as a subcommand under the profile
+name you chose (`nexus` above):
 
 ```sh
-nexus3-go --url http://localhost:8081 --username admin --password admin123 status
+nexus3-go nexus --help
+nexus3-go nexus get-all-repositories
+nexus3-go nexus create-maven-hosted-repository 'name: releases, ...'
+nexus3-go nexus get-all-repositories --help   # full flag/schema/example docs
 ```
+
+See the [Restish docs](https://rest.sh/docs/) for output formatting
+(`-o table`, `-f` shorthand filters), pagination, and profile management —
+all of it applies unchanged since `nexus3-go` is a thin, Nexus-named build of
+the stock Restish CLI.
 
 ## Development
 

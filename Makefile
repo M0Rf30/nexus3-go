@@ -19,7 +19,7 @@ GOFMT=gofmt
 GOLINT=golangci-lint
 
 # Build flags
-LDFLAGS=-ldflags="-s -w -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Version=${VERSION} -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Commit=${COMMIT} -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.BuildTime=${BUILD_TIME}"
+LDFLAGS=-ldflags="-s -w"
 BUILD_FLAGS=-trimpath $(LDFLAGS)
 
 .PHONY: all build build-all clean deps fmt lint test test-coverage release help
