@@ -1,0 +1,92 @@
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - goconst
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - noctx
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+
+  disable:
+    - depguard
+    - exhaustruct
+    - forcetypeassert
+    - funlen
+    - gochecknoglobals
+    - mnd
+    - wrapcheck
+
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - paramTypeCombine
+        - whyNoLint
+
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G204 # Subprocess with variable
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: var-naming
+
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    generated: strict
+
+    rules:
+      # Relax noisy checks for test files
+      - path: "_test\\.go"
+        linters:
+          - goconst
+          - gosec
+
+formatters:
+  enable:
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false

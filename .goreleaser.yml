@@ -1,0 +1,77 @@
+# This is a goreleaser config for nexus3-go.
+# Make sure to check the documentation at https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: nexus3-go
+    main: ./cmd/nexus3-go
+    binary: nexus3-go
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Version=v{{.Version}}
+      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.Commit={{.ShortCommit}}
+      - -X github.com/M0Rf30/nexus3-go/pkg/buildinfo.BuildTime={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: nexus3-go
+    ids: [nexus3-go]
+    formats: tar.gz
+    name_template: "nexus3-go_{{.Os}}_{{.Arch}}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  # Changelog generation implementation to use.
+  use: github
+
+  # Sorts the changelog by the commit's messages.
+  sort: asc
+
+  # Max commit hash length to use in the changelog.
+  abbrev: -1
+
+  # Group commits messages by given regex and title.
+  groups:
+    - title: 🚀 Features
+      regexp: '^.*?feat(\([[:word:]/.-]+\))??!?:.+$'
+      order: 0
+    - title: 🐛 Bug Fixes
+      regexp: '^.*?fix(\([[:word:]/.-]+\))??!?:.+$'
+      order: 1
+    - title: ⚡ Performance
+      regexp: '^.*?perf(\([[:word:]/.-]+\))??!?:.+$'
+      order: 2
+    - title: ♻️  Refactor
+      regexp: '^.*?refactor(\([[:word:]/.-]+\))??!?:.+$'
+      order: 3
+    - title: 📘 Documentation
+      regexp: '^.*?docs(\([[:word:]/.-]+\))??!?:.+$'
+      order: 4
+    - title: 🧪 Tests
+      regexp: '^.*?test(\([[:word:]/.-]+\))??!?:.+$'
+      order: 5
+    - title: 🔧 CI & Build
+      regexp: '^.*?(ci|build)(\([[:word:]/.-]+\))??!?:.+$'
+      order: 6
+    - title: 🧰 Miscellaneous
+      order: 999
+  filters:
+    exclude:
+      - '^Merge '
+      - '^wip:'
+      - '^bump:'
+      - '^style:'

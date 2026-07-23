@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore: ["docs/*.md"]
+  pull_request:
+    branches: ["main"]
+    paths-ignore: ["docs/*.md"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.5"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint & vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -s -l . || true)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt -s formatted:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -v ./...
