@@ -108,6 +108,18 @@ See the [Restish docs](https://rest.sh/docs/) for output formatting
 all of it applies unchanged since `nexus3-go` is a thin, Nexus-named build of
 the stock Restish CLI.
 
+## Docker
+
+Multi-arch (`linux/amd64`, `linux/arm64`) images are published to GHCR on
+every tagged release:
+
+```sh
+docker run --rm ghcr.io/m0rf30/nexus3-go:latest --help
+```
+
+Pin to a specific version instead of `latest` for reproducible pulls
+(e.g. `ghcr.io/m0rf30/nexus3-go:v1.0.0`).
+
 ## Development
 
 ```sh
