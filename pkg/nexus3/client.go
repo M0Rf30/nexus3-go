@@ -2,6 +2,7 @@ package nexus3
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -89,4 +90,20 @@ func (c *Client) API() *v3.APIClient {
 // configured.
 func (c *Client) AuthContext(ctx context.Context) context.Context {
 	return c.authCtx(ctx)
+}
+
+// String implements fmt.Stringer, redacting the configured password so
+// printing or logging a *Client (e.g. via %v, %+v, or fmt.Println) never
+// leaks the credential.
+func (c *Client) String() string {
+	if !c.hasAuth {
+		return "nexus3.Client{}"
+	}
+	return fmt.Sprintf("nexus3.Client{username:%q, password:REDACTED}", c.username)
+}
+
+// GoString implements fmt.GoStringer, redacting the password for the %#v
+// verb the same way String does for %v.
+func (c *Client) GoString() string {
+	return c.String()
 }

@@ -118,7 +118,8 @@ docker run --rm ghcr.io/m0rf30/nexus3-go:latest --help
 ```
 
 Pin to a specific version instead of `latest` for reproducible pulls
-(e.g. `ghcr.io/m0rf30/nexus3-go:v1.0.0`).
+(e.g. `ghcr.io/m0rf30/nexus3-go:0.1.0` — goreleaser tags images with the bare
+version, without the `v` prefix used for git tags).
 
 ## Development
 
