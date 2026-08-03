@@ -160,8 +160,9 @@ func TestUploadMaven2(t *testing.T) {
 
 	path := writeTempFile(t, "lib.jar", "jar-content")
 	client := New(srv.URL)
-	coords := Maven2Coordinates{GroupID: "com.example", ArtifactID: "lib", Version: "1.0", Extension: "jar"}
-	if err := client.UploadMaven2(context.Background(), "maven-hosted", &coords, path); err != nil {
+	coords := Maven2Coordinates{GroupID: "com.example", ArtifactID: "lib", Version: "1.0"}
+	asset := Maven2Asset{Path: path, Extension: "jar"}
+	if err := client.UploadMaven2(context.Background(), "maven-hosted", &coords, asset); err != nil {
 		t.Fatalf("UploadMaven2() error = %v", err)
 	}
 	if gotRepo != "maven-hosted" {
@@ -172,6 +173,88 @@ func TestUploadMaven2(t *testing.T) {
 	}
 	if gotExt != "jar" {
 		t.Errorf("maven2.asset1.extension = %q, want %q", gotExt, "jar")
+	}
+}
+
+func TestUploadMaven2Assets(t *testing.T) {
+	var requests int
+	var gotRepo, gotGroup, gotArtifact, gotVersion string
+	var gotExt1, gotClassifier1, gotExt2, gotClassifier2 string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		gotRepo = r.URL.Query().Get("repository")
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Fatalf("parse multipart form: %v", err)
+		}
+		gotGroup = r.FormValue("maven2.groupId")
+		gotArtifact = r.FormValue("maven2.artifactId")
+		gotVersion = r.FormValue("maven2.version")
+		gotExt1 = r.FormValue("maven2.asset1.extension")
+		gotClassifier1 = r.FormValue("maven2.asset1.classifier")
+		gotExt2 = r.FormValue("maven2.asset2.extension")
+		gotClassifier2 = r.FormValue("maven2.asset2.classifier")
+		if _, _, err := r.FormFile("maven2.asset1"); err != nil {
+			t.Fatalf("read maven2.asset1 part: %v", err)
+		}
+		if _, _, err := r.FormFile("maven2.asset2"); err != nil {
+			t.Fatalf("read maven2.asset2 part: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	jarPath := writeTempFile(t, "lib.jar", "jar-content")
+	sourcesPath := writeTempFile(t, "lib-sources.jar", "sources-content")
+	client := New(srv.URL)
+	coords := Maven2Coordinates{GroupID: "com.example", ArtifactID: "lib", Version: "1.0"}
+	assets := []Maven2Asset{
+		{Path: jarPath, Extension: "jar"},
+		{Path: sourcesPath, Extension: "jar", Classifier: "sources"},
+	}
+	if err := client.UploadMaven2Assets(context.Background(), "maven-hosted", &coords, assets); err != nil {
+		t.Fatalf("UploadMaven2Assets() error = %v", err)
+	}
+	if requests != 1 {
+		t.Errorf("requests = %d, want 1", requests)
+	}
+	if gotRepo != "maven-hosted" {
+		t.Errorf("repository = %q, want %q", gotRepo, "maven-hosted")
+	}
+	if gotGroup != "com.example" || gotArtifact != "lib" || gotVersion != "1.0" {
+		t.Errorf("coordinates = %s:%s:%s, want com.example:lib:1.0", gotGroup, gotArtifact, gotVersion)
+	}
+	if gotExt1 != "jar" || gotClassifier1 != "" {
+		t.Errorf("asset1 extension/classifier = %q/%q, want jar/\"\"", gotExt1, gotClassifier1)
+	}
+	if gotExt2 != "jar" || gotClassifier2 != "sources" {
+		t.Errorf("asset2 extension/classifier = %q/%q, want jar/sources", gotExt2, gotClassifier2)
+	}
+}
+
+func TestUploadMaven2Assets_InvalidCount(t *testing.T) {
+	tests := []struct {
+		name  string
+		count int
+	}{
+		{"zero assets", 0},
+		{"too many assets", MaxMaven2Assets + 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assets := make([]Maven2Asset, tt.count)
+			for i := range assets {
+				assets[i] = Maven2Asset{Path: writeTempFile(t, "a.jar", "x")}
+			}
+			client := New("http://unused.invalid")
+			coords := Maven2Coordinates{GroupID: "g", ArtifactID: "a", Version: "1.0"}
+			err := client.UploadMaven2Assets(context.Background(), "maven-hosted", &coords, assets)
+			if err == nil {
+				t.Fatalf("UploadMaven2Assets() error = nil, want error for %d assets", tt.count)
+			}
+			if !strings.Contains(err.Error(), "upload maven2") {
+				t.Errorf("UploadMaven2Assets() error = %v, want an 'upload maven2' wrapped error", err)
+			}
+		})
 	}
 }
 

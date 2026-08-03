@@ -135,6 +135,63 @@ nexus3-go upload npm --base-url http://localhost:8081 \
 
 `--base-url` also reads from `NEXUS_BASE_URL` if unset.
 
+### Multiple files
+
+`--file` is repeatable, and trailing positional arguments are treated as
+files too — mix and match whichever's convenient. Any value containing a
+glob metacharacter (`*`, `?`, `[`) is expanded with `filepath.Glob`; quote
+it so your shell passes the pattern through to `nexus3-go` instead of
+expanding it itself:
+
+```sh
+nexus3-go upload deb --base-url http://localhost:8081 \
+    --repository apt-hosted --file 'dist/*.deb'
+
+nexus3-go upload rpm --base-url http://localhost:8081 \
+    --repository yum-hosted \
+    --file build/mypkg-1.0.el9.x86_64.rpm --file build/mypkg-1.0.el9.noarch.rpm
+```
+
+For every kind except maven2 (which packs its assets into a single request
+— see below), each matched file becomes its own upload request, and up to
+`--concurrency` (default `4`) run in parallel; the flag has no effect on
+maven2. A failure on one file never aborts the rest: every file is
+attempted regardless of earlier failures, and if any fail the command
+exits non-zero after reporting how many succeeded (`uploaded N/M`) followed
+by each failing path and its error.
+
+### Maven2 multi-asset components
+
+A single Maven2 component can bundle more than one asset — the jar, its
+POM, a `-sources` jar — as long as they share one group/artifact/version
+and go up together in one `POST /v1/components` request. Nexus's API caps
+that request at three assets (`asset1`..`asset3`), which is a limit of the
+Nexus API itself, not of this CLI — so `--asset` may be repeated at most
+three times.
+
+Once you have more than one asset, use the repeatable
+`--asset path[:extension[:classifier]]` flag instead of `--file`:
+
+```sh
+nexus3-go upload maven2 --base-url http://localhost:8081 \
+    --repository maven-hosted \
+    --group-id com.example --artifact-id lib --version 1.0 \
+    --asset lib.jar \
+    --asset lib.pom:pom \
+    --asset lib-sources.jar:jar:sources
+```
+
+Extension and classifier travel inside each `--asset` value rather than as
+separate, index-aligned `--extension`/`--classifier` list flags: with
+parallel arrays, a dropped or reordered entry silently attaches the wrong
+metadata to the wrong file, and nothing catches it. Keeping
+`path:extension:classifier` together as one token makes that class of bug
+structurally impossible — there is no index to misalign.
+
+`--extension` and `--classifier` still exist as plain scalar strings, but
+only apply to the single-asset `--file` form above. `--file` and `--asset`
+are mutually exclusive for maven2 — combining them is an error.
+
 ## Docker
 
 Multi-arch (`linux/amd64`, `linux/arm64`) images are published to GHCR on
