@@ -69,16 +69,49 @@ func main() {
 ```
 
 Only a handful of convenience methods are wrapped (`ListRepositories`,
-`SearchComponents`/`ListComponents`, `Status`). For anything else — blob
-stores, security, tasks, staging, cleanup policies, and the rest of Nexus's
-~950-endpoint REST surface — drop down to the generated client directly via
-`Client.API()`, authenticating each call with `Client.AuthContext(ctx)`:
+`SearchComponents`/`SearchComponentsPage`, `ListComponents`, `Status`). For
+anything else — blob stores, security, tasks, staging, cleanup policies, and
+the rest of Nexus's ~950-endpoint REST surface — drop down to the generated
+client directly via `Client.API()`, authenticating each call with
+`Client.AuthContext(ctx)`:
 
 ```go
 api := client.API()
 ctx := client.AuthContext(context.Background())
 
 task, _, err := api.TasksAPI.GetTaskById(ctx, taskID).Execute()
+```
+
+### Pagination
+
+`AllComponents` and `AllSearchResults` return Go 1.23 range-over-func
+iterators that follow continuation tokens for you:
+
+```go
+for comp, err := range client.AllSearchResults(ctx, "maven-releases", "commons-*") {
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(comp.GetName(), comp.GetVersion())
+}
+```
+
+To page manually, feed the token from `SearchComponents` back into
+`SearchComponentsPage` (same repository and query), or from one
+`ListComponents` call into the next. Search and list tokens are not
+interchangeable.
+
+### Errors
+
+When Nexus answers with a non-2xx status, the returned error wraps an
+`*nexus3.APIError` carrying the status code and the server's response body,
+which usually holds the real reason:
+
+```go
+var apiErr *nexus3.APIError
+if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest {
+	log.Printf("rejected by Nexus: %s", apiErr.Body)
+}
 ```
 
 ## CLI usage
@@ -134,6 +167,11 @@ nexus3-go upload npm --base-url http://localhost:8081 \
 ```
 
 `--base-url` also reads from `NEXUS_BASE_URL` if unset.
+
+Run `nexus3-go upload --help` for the full kind list, or
+`nexus3-go upload <kind> --help` for that kind's flags. Ctrl-C (or SIGTERM)
+cancels in-flight uploads, and `--timeout 5m` bounds the whole command;
+files that never started are reported as cancelled.
 
 ### Multiple files
 
@@ -208,10 +246,19 @@ version, without the `v` prefix used for git tags).
 ## Development
 
 ```sh
-make build   # build ./bin/nexus3-go
-make test    # go test -v ./...
+make build   # build ./bin/nexus3-go (version/commit/date injected via -ldflags)
+make test    # go test -race -count=1 ./...
 make lint    # golangci-lint run
+make tidy    # go mod tidy (CI fails if go.mod/go.sum drift)
+make vuln    # govulncheck ./...
 ```
+
+`nexus3-go version` (or `--version`) prints the version, commit, and build
+date; `go install ...@vX.Y.Z` builds report the module version instead.
+
+The `Dockerfile` expects goreleaser's `dockers_v2` build context
+(`<os>/<arch>/nexus3-go`), so build images with `goreleaser release
+--snapshot --clean` rather than a plain `docker build`.
 
 See `make help` for the full target list.
 
