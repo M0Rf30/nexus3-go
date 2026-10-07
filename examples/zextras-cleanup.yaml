@@ -1,0 +1,53 @@
+# Port of zextras/infra-jfrog-cleanup (artifactory-cleanup.yaml + custom_rule.py)
+# to Nexus Repository CE repository names (see infra-nexus/docs/migration.md).
+#
+# Semantics: keepLatest and keepDays are a UNION keep, like custom_rule.py:
+# a component survives if it is among the newest `keepLatest` versions of its
+# (repository, group, name) OR younger than `keepDays`. Everything else is
+# deleted. Age comes from the build timestamp embedded in the version, falling
+# back to blob creation time. Release / ALLOW_ONCE repos are deliberately NOT
+# listed: they are never cleaned.
+#
+# Dry-run by default:
+#   nexus3-go cleanup --policy examples/zextras-cleanup.yaml
+policies:
+  # JFrog origin: "rc" rule - keep the 3 newest versions or anything younger
+  # than 14 days (custom_rule.py keep-N OR keep-days).
+  - name: rc
+    repositories:
+      - ubuntu-rc-jammy
+      - ubuntu-rc-noble
+      - rhel9-rc
+      - rhel8-rc
+    keepLatest: 3
+    keepDays: 14
+
+  # JFrog origin: "devel" rule - keep only the 3 newest versions per package.
+  - name: devel
+    repositories:
+      - ubuntu-devel-jammy
+      - ubuntu-devel-noble
+      - rhel9-devel
+      - rhel8-devel
+    keepLatest: 3
+
+  # JFrog origin: "maven-snapshot" rule - delete snapshots older than 90 days.
+  # releaseType restricts the policy to snapshot versions only.
+  - name: maven-snapshot
+    repositories:
+      - maven-snapshots
+    releaseType: prerelease
+    olderThan: 90d
+
+  # JFrog origin: "playground" rule - delete anything older than 3 days.
+  - name: playground
+    repositories:
+      - pg-ubuntu-devel-jammy
+      - pg-ubuntu-devel-noble
+      - pg-ubuntu-rc-jammy
+      - pg-ubuntu-rc-noble
+      - pg-rhel9-devel
+      - pg-rhel8-devel
+      - pg-rhel9-rc
+      - pg-rhel8-rc
+    olderThan: 3d

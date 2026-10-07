@@ -48,7 +48,7 @@ func main() {
 }
 
 // run executes the CLI for args (including the program name) and returns the
-// process exit code. "upload", "version" and "--version" are handled here;
+// process exit code. "upload", "cleanup", "version" and "--version" are handled here;
 // everything else goes to Restish. Ctrl-C or SIGTERM cancels in-flight
 // uploads.
 func run(args []string, stdout, stderr io.Writer) int {
@@ -56,6 +56,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		switch args[1] {
 		case "version", "--version":
 			printVersion(stdout)
+			return 0
+		case "cleanup":
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			if err := runCleanupContext(ctx, args[2:], stdout, stderr); err != nil {
+				_, _ = fmt.Fprintln(stderr, err)
+				return 1
+			}
+
 			return 0
 		case "upload":
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

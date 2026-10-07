@@ -26,6 +26,10 @@ UNOFFICIAL Go client and CLI for Sonatype Nexus Repository Manager 3, built on t
   policies, and more), always in sync with whatever version that specific
   server actually runs, with no code generation or vendoring on our side.
 
+Beyond the generated commands, the CLI ships two hand-written commands:
+`upload` (multipart component upload) and `cleanup` (client-side retention
+policies, see [Cleanup](#cleanup)).
+
 ## Installation
 
 Library:
@@ -229,6 +233,95 @@ structurally impossible — there is no index to misalign.
 `--extension` and `--classifier` still exist as plain scalar strings, but
 only apply to the single-asset `--file` form above. `--file` and `--asset`
 are mutually exclusive for maven2 — combining them is an error.
+
+## Cleanup
+
+Nexus Community Edition has no "retain N versions" cleanup policy: that
+feature is Pro-only (and requires PostgreSQL). `nexus3-go cleanup` replaces it
+client-side. It lists components through the REST API, decides what to delete
+from a YAML policy file, and deletes them. It is a port of zextras'
+[JFrog cleanup](https://github.com/zextras/infra-jfrog-cleanup); a ready-made
+translation lives in [`examples/zextras-cleanup.yaml`](examples/zextras-cleanup.yaml).
+
+```yaml
+policies:
+  - name: rc
+    repositories: [ubuntu-rc-jammy, rhel9-rc]
+    keepLatest: 3
+    keepDays: 14
+  - name: maven-snapshot
+    repositories: [maven-snapshots]
+    releaseType: prerelease
+    olderThan: 90d
+```
+
+### Policy reference
+
+| Key | Meaning |
+|---|---|
+| `name` | Required policy name, shown in the plan. |
+| `repositories` | Required, at least one repository. |
+| `keepLatest` | Keep the newest N versions per repository+group+name (0 = disabled). |
+| `keepDays` | Also keep anything younger than N days (0 = today only; unset = disabled). Union with `keepLatest`. |
+| `olderThan` | Delete components older than `90d` / `90` days (0 = disabled). |
+| `releaseType` | `any` (default), `release` or `prerelease`; components outside it are never touched and do not count toward `keepLatest`. |
+| `ageFrom` | `versionTimestamp` (default: timestamp embedded in the version, then blob creation time) or `uploaded`. |
+| `versionOrder` | `auto` (default, by repository format) or `debian`, `rpm`, `maven`, `semver`, `lexical`. |
+| `includeNames`, `excludeNames` | Regexes on the component name. |
+| `protectVersions` | Regexes on versions that are never deleted. |
+
+At least one of `keepLatest` or `olderThan` is required. With both, a component
+is deleted only if it is outside the newest N **and** older than `olderThan`.
+A component matched by several policies is planned once (first policy wins).
+Migrated content has a blob creation date equal to the migration date, which is
+why age defaults to the build timestamp embedded in the version.
+
+### Workflow
+
+```sh
+export NEXUS_BASE_URL=https://nexus.example.com NEXUS_USERNAME=ci NEXUS_PASSWORD=***
+
+nexus3-go cleanup --policy cleanup.yaml                      # dry-run: print the plan only
+nexus3-go cleanup --policy cleanup.yaml --output json        # machine-readable plan
+nexus3-go cleanup --policy cleanup.yaml --apply              # delete the planned components
+nexus3-go cleanup --policy cleanup.yaml --apply --compact    # ...then run every blobstore.compact task
+```
+
+Deleting a component only marks blobs as deleted; disk space is reclaimed by a
+"Compact blob store" task, which `--compact` triggers (a warning is printed if
+none is configured). The command exits 1 if any delete fails.
+
+### Request budget
+
+Some CE deployments sit behind rate or request limits. `--max-requests N`
+caps the work: listing counts one request per 100 components (minimum one per
+repository) and each delete counts one. Planned deletes beyond the budget are
+reported as failed with a request-budget error and can be picked up by the next
+run. The plan prints its estimated request count.
+
+### Jenkins
+
+Mirrors the JFrog Jenkinsfile: a `DESTROY` boolean parameter switches from
+dry-run to deletion.
+
+```groovy
+pipeline {
+  agent any
+  triggers { cron('H 3 * * *') }
+  parameters { booleanParam(name: 'DESTROY', defaultValue: false, description: 'Really delete') }
+  environment { NEXUS_BASE_URL = 'https://nexus.example.com' }
+  stages {
+    stage('Cleanup') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'jenkins-ci',
+            usernameVariable: 'NEXUS_USERNAME', passwordVariable: 'NEXUS_PASSWORD')]) {
+          sh "nexus3-go cleanup --policy zextras-cleanup.yaml --max-requests 5000 ${params.DESTROY ? '--apply --compact' : ''}"
+        }
+      }
+    }
+  }
+}
+```
 
 ## Docker
 
