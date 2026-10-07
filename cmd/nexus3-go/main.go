@@ -33,26 +33,51 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	restish "github.com/rest-sh/restish/v2"
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "upload" {
-		if err := runUpload(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+	os.Exit(run(os.Args, os.Stdout, os.Stderr))
+}
+
+// run executes the CLI for args (including the program name) and returns the
+// process exit code. "upload", "version" and "--version" are handled here;
+// everything else goes to Restish. Ctrl-C or SIGTERM cancels in-flight
+// uploads.
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 1 {
+		switch args[1] {
+		case "version", "--version":
+			printVersion(stdout)
+			return 0
+		case "upload":
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			if err := runUploadContext(ctx, args[2:], stdout, stderr); err != nil {
+				_, _ = fmt.Fprintln(stderr, err)
+				return 1
+			}
+
+			return 0
 		}
-		return
 	}
 
 	cli := restish.New()
 	cli.SetCommandName("nexus3-go")
+	cli.SetVersion(buildVersion())
 
-	if err := cli.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if err := cli.Run(args); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 1
 	}
+
+	return 0
 }
