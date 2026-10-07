@@ -2,7 +2,6 @@ package nexus3
 
 import (
 	"context"
-	"fmt"
 
 	v3 "github.com/sonatype-nexus-community/nexus-repo-api-client-go/v3"
 )
@@ -17,7 +16,7 @@ func (c *Client) ListRepositories(ctx context.Context) ([]v3.RepositoryXO, error
 		defer func() { _ = resp.Body.Close() }()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("nexus3: list repositories: %w", err)
+		return nil, wrapAPIError("list repositories", resp, err)
 	}
 	return repos, nil
 }

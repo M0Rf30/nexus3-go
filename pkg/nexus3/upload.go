@@ -3,8 +3,10 @@ package nexus3
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	v3 "github.com/sonatype-nexus-community/nexus-repo-api-client-go/v3"
@@ -70,7 +72,7 @@ func (c *Client) doUpload(ctx context.Context, op, repository, filePath string, 
 		defer func() { _ = resp.Body.Close() }()
 	}
 	if err != nil {
-		return fmt.Errorf("nexus3: upload %s %s to %s: %w", op, filePath, repository, err)
+		return wrapAPIError(fmt.Sprintf("upload %s %s to %s", op, filePath, repository), resp, err)
 	}
 	return nil
 }
@@ -230,6 +232,12 @@ func (c *Client) UploadMaven2(ctx context.Context, repository string, coords *Ma
 	return c.UploadMaven2Assets(ctx, repository, coords, []Maven2Asset{asset})
 }
 
+// SimpleFormats returns, sorted, the format names UploadSimple accepts:
+// hosted formats whose upload needs nothing beyond the file itself.
+func SimpleFormats() []string {
+	return slices.Sorted(maps.Keys(simpleFormats))
+}
+
 // UploadSimple uploads a single file to a Nexus hosted repository whose
 // format needs nothing beyond the file itself: go, helm, npm, nuget, pypi,
 // or rubygems. Use UploadDeb, UploadRpm, UploadRaw, or UploadMaven2 for
@@ -238,12 +246,8 @@ func (c *Client) UploadMaven2(ctx context.Context, repository string, coords *Ma
 func (c *Client) UploadSimple(ctx context.Context, format, repository, filePath string) error {
 	setAsset, ok := simpleFormats[format]
 	if !ok {
-		supported := make([]string, 0, len(simpleFormats))
-		for f := range simpleFormats {
-			supported = append(supported, f)
-		}
-		return fmt.Errorf("nexus3: upload: unsupported format %q, want one of %v "+
-			"(or deb/rpm/raw/maven2 via their dedicated methods)", format, supported)
+		return fmt.Errorf("nexus3: upload: unsupported format %q, want one of %s "+
+			"(or deb/rpm/raw/maven2 via their dedicated methods)", format, strings.Join(SimpleFormats(), ", "))
 	}
 
 	f, err := openUploadFile(format, filePath)

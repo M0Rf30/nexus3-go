@@ -2,7 +2,6 @@ package nexus3
 
 import (
 	"context"
-	"fmt"
 )
 
 // Status performs the basic Nexus health check (GET /v1/status) and returns
@@ -14,7 +13,7 @@ func (c *Client) Status(ctx context.Context) error {
 		defer func() { _ = resp.Body.Close() }()
 	}
 	if err != nil {
-		return fmt.Errorf("nexus3: status: %w", err)
+		return wrapAPIError("status", resp, err)
 	}
 	return nil
 }
