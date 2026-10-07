@@ -3,17 +3,17 @@ name: CI
 on:
   push:
     branches: ["main"]
-    paths-ignore: ["docs/*.md"]
+    paths-ignore: ["**.md"]
   pull_request:
     branches: ["main"]
-    paths-ignore: ["docs/*.md"]
+    paths-ignore: ["**.md"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26.5"
+  GO_VERSION: "1.27.1"
 
 permissions:
   contents: read
@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -39,10 +39,14 @@ jobs:
           fi
       - name: go vet
         run: go vet ./...
+      - name: go mod tidy drift check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12.2
+          version: v2.14.0
 
   test:
     name: Test
@@ -50,7 +54,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -59,4 +63,31 @@ jobs:
       - name: Build
         run: go build ./...
       - name: Test
-        run: go test -v ./...
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -n 1
+      - name: Upload coverage profile
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: error
+          retention-days: 7
+
+  govulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      # Non-blocking for now: GO-2026-4513 and GO-2026-4740 (DoS in
+      # github.com/shamaton/msgpack/v3, pulled in transitively by Restish's
+      # msgpack response decoder) have no upstream fix yet. Make this step
+      # blocking again once `govulncheck ./...` reports clean.
+      - name: govulncheck
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

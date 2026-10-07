@@ -5,7 +5,9 @@ version: 2
 
 before:
   hooks:
-    - go mod tidy
+    # A release must not mutate go.mod/go.sum (CI enforces `go mod tidy`
+    # cleanliness), so only verify the module cache instead of tidying.
+    - go mod verify
 
 builds:
   - id: nexus3-go
@@ -13,8 +15,11 @@ builds:
     binary: nexus3-go
     env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     goos:
       - linux
       - darwin
@@ -37,45 +42,24 @@ archives:
     formats: tar.gz
     name_template: "nexus3-go_{{.Os}}_{{.Arch}}"
 
-dockers:
-  - image_templates:
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-amd64"
+dockers_v2:
+  - id: nexus3-go
+    ids: [nexus3-go]
     dockerfile: Dockerfile
-    use: buildx
-    goos: linux
-    goarch: amd64
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source=https://github.com/M0Rf30/nexus3-go"
-  - image_templates:
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-arm64"
-    dockerfile: Dockerfile
-    use: buildx
-    goos: linux
-    goarch: arm64
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source=https://github.com/M0Rf30/nexus3-go"
-
-docker_manifests:
-  - name_template: "ghcr.io/m0rf30/nexus3-go:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-amd64"
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/m0rf30/nexus3-go:latest"
-    image_templates:
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-amd64"
-      - "ghcr.io/m0rf30/nexus3-go:{{ .Version }}-arm64"
+    images:
+      - "ghcr.io/m0rf30/nexus3-go"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.title": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "https://github.com/M0Rf30/nexus3-go"
 
 checksum:
   name_template: "checksums.txt"

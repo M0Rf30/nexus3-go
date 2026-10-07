@@ -5,9 +5,9 @@ BINARY_NAME=nexus3-go
 MAIN_PATH=./cmd/nexus3-go
 BUILD_DIR=./bin
 DIST_DIR=./dist
-VERSION=$(shell git describe --tags --always --dirty)
-COMMIT=$(shell git rev-parse HEAD)
-BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT=$(shell git rev-parse HEAD 2>/dev/null || echo none)
+BUILD_TIME=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
 # Go parameters
 GOCMD=go
@@ -19,10 +19,10 @@ GOFMT=gofmt
 GOLINT=golangci-lint
 
 # Build flags
-LDFLAGS=-ldflags="-s -w"
+LDFLAGS=-ldflags="-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(BUILD_TIME)"
 BUILD_FLAGS=-trimpath $(LDFLAGS)
 
-.PHONY: all build build-all clean deps fmt lint test test-coverage release help
+.PHONY: all build build-all clean deps tidy fmt lint vuln test test-coverage release help
 
 # Default target
 all: clean deps fmt lint test build
@@ -55,6 +55,16 @@ deps:
 	@echo "Downloading dependencies..."
 	$(GOMOD) download
 
+# Tidy go.mod/go.sum
+tidy:
+	@echo "Tidying modules..."
+	$(GOMOD) tidy
+
+# Scan for known vulnerabilities
+vuln:
+	@echo "Running govulncheck..."
+	$(GOCMD) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 # Format code
 fmt:
 	@echo "Formatting code..."
@@ -68,12 +78,12 @@ lint:
 # Run tests
 test:
 	@echo "Running tests..."
-	$(GOTEST) -v ./...
+	$(GOTEST) -race -count=1 ./...
 
 # Run tests with coverage
 test-coverage:
 	@echo "Running tests with coverage..."
-	$(GOTEST) -coverprofile=coverage.out ./...
+	$(GOTEST) -race -count=1 -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
@@ -90,9 +100,11 @@ help:
 	@echo "  build-all      - Cross-build for linux/darwin amd64/arm64 into dist/"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  deps           - Download dependencies"
+	@echo "  tidy           - Run go mod tidy"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Lint code"
-	@echo "  test           - Run tests"
+	@echo "  vuln           - Scan dependencies with govulncheck"
+	@echo "  test           - Run tests with the race detector"
 	@echo "  test-coverage  - Run tests with coverage report"
 	@echo "  release        - Create a release with goreleaser"
 	@echo "  help           - Show this help"
